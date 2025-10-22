@@ -1,2 +1,4 @@
 .vscode/*
 .claude/*
+.test_data/*
+.DS_Store
