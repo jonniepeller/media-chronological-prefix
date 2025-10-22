@@ -166,14 +166,17 @@ def get_capture_date(filepath):
     return None
 
 
-def count_files(directory="."):
-    """Count the number of files in the given directory (excluding subdirectories)."""
+def get_file_list(directory="."):
+    """
+    Get list of files in the given directory (excluding subdirectories).
+    Returns a list of filenames.
+    """
     try:
         items = os.listdir(directory)
         files = [item for item in items if os.path.isfile(os.path.join(directory, item))]
-        return len(files)
+        return files
     except Exception as e:
-        print(f"Error counting files: {e}")
+        print(f"Error listing files: {e}")
         sys.exit(1)
 
 
@@ -222,10 +225,19 @@ def get_file_metadata(directory="."):
         sys.exit(1)
 
 
-def confirm_continue(file_count):
-    """Ask user for confirmation before proceeding."""
+def confirm_continue(file_count, file_list):
+    """Ask user for initial confirmation before proceeding."""
     print(f"\nFound {file_count} file(s) in the current directory.")
-    print(f"This script will attempt to rename {file_count} file(s).")
+
+    # Show first up to 3 files
+    if file_list:
+        print("\nSample files:")
+        for i, filename in enumerate(file_list[:3], 1):
+            print(f"  {i}. {filename}")
+        if file_count > 3:
+            print(f"  ... and {file_count - 3} more")
+
+    print(f"\nThis script will attempt to rename all {file_count} file(s).")
 
     while True:
         response = input("\nDo you want to continue? (y/n): ").lower().strip()
@@ -236,6 +248,150 @@ def confirm_continue(file_count):
             return False
         else:
             print("Please enter 'y' or 'n'.")
+
+
+def generate_new_filename(file_info, existing_names):
+    """
+    Generate a new filename with date prefix.
+    Format: YYYY-MM-DD HH:MM:SS original_filename.ext (24-hour time)
+    Includes milliseconds if available.
+    Handles collisions by adding a counter suffix.
+    """
+    final_date = file_info['final_date']
+    original_filename = file_info['filename']
+
+    # Format: YYYY-MM-DD HH:MM:SS (24-hour time)
+    # Try to include microseconds if available
+    if hasattr(final_date, 'microsecond') and final_date.microsecond > 0:
+        # Convert microseconds to milliseconds (first 3 digits)
+        milliseconds = final_date.microsecond // 1000
+        date_prefix = final_date.strftime(f'%Y-%m-%d %H:%M:%S.{milliseconds:03d}')
+    else:
+        date_prefix = final_date.strftime('%Y-%m-%d %H:%M:%S')
+
+    # Create new filename
+    new_filename = f"{date_prefix} {original_filename}"
+
+    # Handle collisions - if filename already exists, add counter
+    if new_filename in existing_names:
+        base_name, extension = os.path.splitext(original_filename)
+        counter = 1
+        while True:
+            new_filename = f"{date_prefix} {base_name} ({counter}){extension}"
+            if new_filename not in existing_names:
+                break
+            counter += 1
+
+    return new_filename
+
+
+def confirm_missing_capture_dates(files_data):
+    """
+    Check for files with missing capture dates and ask user for confirmation.
+    Returns True to continue, False to cancel.
+    """
+    # Find files without capture dates
+    missing_capture = [f for f in files_data if f['capture_date'] is None]
+
+    if not missing_capture:
+        # All files have capture dates
+        return True
+
+    # Some files are missing capture dates
+    print("\n" + "=" * 60)
+    print("WARNING: Files with Missing Capture Dates")
+    print("=" * 60)
+    print(f"\n{len(missing_capture)} file(s) do not have capture date metadata.")
+    print("These files will use modified date or created date instead.\n")
+
+    # Show first up to 5 files without capture dates
+    print("Files without capture dates:")
+    for i, file_info in enumerate(missing_capture[:5], 1):
+        fallback = "modified date" if file_info['final_date'] == file_info['modified_date'] else "created date"
+        print(f"  {i}. {file_info['filename']} (will use {fallback})")
+
+    if len(missing_capture) > 5:
+        print(f"  ... and {len(missing_capture) - 5} more")
+
+    print(f"\nFiles with capture dates: {len(files_data) - len(missing_capture)}/{len(files_data)}")
+    print(f"Files using fallback dates: {len(missing_capture)}/{len(files_data)}")
+
+    while True:
+        response = input("\nDo you want to continue with renaming? (y/n): ").lower().strip()
+        if response in ['y', 'yes']:
+            return True
+        elif response in ['n', 'no']:
+            print("Operation cancelled.")
+            return False
+        else:
+            print("Please enter 'y' or 'n'.")
+
+
+def preview_renames(files_data):
+    """
+    Show a preview of the renames and ask for final confirmation.
+    Returns True to continue, False to cancel.
+    """
+    print("\n" + "=" * 60)
+    print("Preview of Renaming")
+    print("=" * 60)
+    print("\nShowing first up to 5 renames:\n")
+
+    for i, file_info in enumerate(files_data[:5], 1):
+        print(f"{i}. {file_info['filename']}")
+        print(f"   → {file_info['new_filename']}")
+        print()
+
+    if len(files_data) > 5:
+        print(f"... and {len(files_data) - 5} more files will be renamed")
+
+    print(f"\nTotal files to rename: {len(files_data)}")
+
+    while True:
+        response = input("\nProceed with renaming? (y/n): ").lower().strip()
+        if response in ['y', 'yes']:
+            return True
+        elif response in ['n', 'no']:
+            print("Operation cancelled.")
+            return False
+        else:
+            print("Please enter 'y' or 'n'.")
+
+
+def rename_files(files_data, target_dir):
+    """
+    Perform the actual file renaming.
+    Returns count of successfully renamed files.
+    """
+    renamed_count = 0
+    errors = []
+
+    print("\nRenaming files...")
+
+    for file_info in files_data:
+        old_path = file_info['original_path']
+        new_path = os.path.join(target_dir, file_info['new_filename'])
+
+        try:
+            os.rename(old_path, new_path)
+            renamed_count += 1
+        except Exception as e:
+            errors.append((file_info['filename'], str(e)))
+
+    # Display results
+    print("\n" + "=" * 60)
+    print("Renaming Complete")
+    print("=" * 60)
+    print(f"\nSuccessfully renamed: {renamed_count}/{len(files_data)} files")
+
+    if errors:
+        print(f"\nErrors ({len(errors)}):")
+        for filename, error in errors[:5]:
+            print(f"  - {filename}: {error}")
+        if len(errors) > 5:
+            print(f"  ... and {len(errors) - 5} more errors")
+
+    return renamed_count
 
 
 def main():
@@ -273,11 +429,12 @@ def main():
     else:
         print(f"Target directory: {target_dir}")
 
-    # Count files
-    file_count = count_files(target_dir)
+    # Get list of files
+    file_list = get_file_list(target_dir)
+    file_count = len(file_list)
 
     # Get user confirmation
-    if not confirm_continue(file_count):
+    if not confirm_continue(file_count, file_list):
         sys.exit(0)
 
     print("\nProceeding with file renaming...")
@@ -298,8 +455,24 @@ def main():
         print(f"  Created Date: {sample['created_date']}")
         print(f"  Final Date (for renaming): {sample['final_date']}")
 
-    # TODO: Generate new filenames and perform rename
-    print("\nFile renaming functionality coming soon!")
+    # Check for missing capture dates and confirm
+    if not confirm_missing_capture_dates(files_data):
+        sys.exit(0)
+
+    # Generate new filenames
+    print("\nGenerating new filenames...")
+    existing_names = set()
+    for file_info in files_data:
+        new_filename = generate_new_filename(file_info, existing_names)
+        file_info['new_filename'] = new_filename
+        existing_names.add(new_filename)
+
+    # Preview renames and get final confirmation
+    if not preview_renames(files_data):
+        sys.exit(0)
+
+    # Perform the renaming
+    rename_files(files_data, target_dir)
 
 
 if __name__ == "__main__":
