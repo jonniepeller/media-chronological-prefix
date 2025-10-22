@@ -32,6 +32,9 @@ EXAMPLES:
 
     # Process videos in a specific folder
     python3 media_chronological_rename.py ~/Videos/vacation_2024
+
+TODO:
+    Need to ignore hidden files like .DS_Store on Mac
 """
 
 import os
