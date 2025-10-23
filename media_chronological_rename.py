@@ -2,6 +2,9 @@
 """
 Media Chronological Rename
 See README.md for docs
+
+TODO:
+- Ask user if they want to replace prefix, or ignore files that have already been named this way—then do what they ask.
 """
 
 import os
