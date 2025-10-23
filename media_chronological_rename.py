@@ -1,42 +1,7 @@
 #!/usr/bin/env python3
 """
 Media Chronological Rename
-Prefix all files within given folder with capture date, falling back to date modified, then date created.
-
-USAGE:
-    # Run on current directory
-    python3 media_chronological_rename.py
-
-    # Run on a specific directory
-    python3 media_chronological_rename.py /path/to/media/folder
-
-    # Make executable and run directly
-    chmod +x media_chronological_rename.py
-    ./media_chronological_rename.py
-    ./media_chronological_rename.py /path/to/media/folder
-
-    # View help
-    python3 media_chronological_rename.py --help
-
-DEPENDENCIES:
-    Required:
-    - PIL/Pillow: For image EXIF data extraction
-    - Hachoir: For video metadata extraction
-
-    Installation (automatic on first run, or manual):
-    pip install Pillow hachoir
-
-EXAMPLES:
-    # Process photos in current directory
-    python3 media_chronological_rename.py
-
-    # Process videos in a specific folder
-    python3 media_chronological_rename.py ~/Videos/vacation_2024
-
-NOTE:
-    Hidden files and system files are automatically ignored:
-    - Mac/Linux: Files starting with . (e.g., .DS_Store)
-    - Windows: Thumbs.db, desktop.ini, and other common system files
+See README.md for docs
 """
 
 import os
@@ -44,6 +9,7 @@ import sys
 import argparse
 from datetime import datetime
 import subprocess
+import mimetypes
 
 # Check for required dependencies
 MISSING_DEPS = []
@@ -167,44 +133,28 @@ def get_capture_date(filepath):
     return None
 
 
-def should_ignore_file(filename):
+def is_media_file(filepath):
     """
-    Check if a file should be ignored based on common hidden/system files.
-    Returns True if the file should be ignored, False otherwise.
+    Check if a file is a photo or video based on MIME type.
+    Returns True if the file is image/* or video/*, False otherwise.
     """
-    # Ignore hidden files (starting with .)
-    if filename.startswith('.'):
-        return True
+    mime_type, _ = mimetypes.guess_type(filepath)
 
-    # Ignore common Windows system files (case-insensitive)
-    windows_system_files = {
-        'thumbs.db',
-        'desktop.ini',
-        'thumbs.db:encryptable',
-        'ethumbs.db',
-        'ethumbs_vista.db',
-        '$recycle.bin',
-        'system volume information',
-        'pagefile.sys',
-        'hiberfil.sys',
-        'swapfile.sys'
-    }
-
-    if filename.lower() in windows_system_files:
-        return True
+    if mime_type:
+        return mime_type.startswith('image/') or mime_type.startswith('video/')
 
     return False
 
 
 def get_filtered_files(directory="."):
     """
-    Get list of non-ignored files in the given directory.
-    Returns a list of filenames (excludes subdirectories, hidden files, and system files).
+    Get list of media files (photos/videos) in the given directory.
+    Returns a list of filenames (excludes subdirectories and non-media files).
     """
     items = os.listdir(directory)
     files = [item for item in items
             if os.path.isfile(os.path.join(directory, item))
-            and not should_ignore_file(item)]
+            and is_media_file(os.path.join(directory, item))]
     return files
 
 
@@ -227,7 +177,8 @@ def prompt_yes_no(question, cancel_message="Operation cancelled."):
 
 def get_file_list(directory="."):
     """
-    Get list of files in the given directory (excluding subdirectories, hidden files, and system files).
+    Get list of media files in the given directory (photos and videos only).
+    Excludes subdirectories and non-media files.
     Returns a list of filenames.
     """
     try:
@@ -239,7 +190,8 @@ def get_file_list(directory="."):
 
 def get_file_metadata(directory="."):
     """
-    Get metadata for all files in the directory (excluding hidden files and system files).
+    Get metadata for all media files in the directory (photos and videos only).
+    Excludes non-media files.
     Returns a list of dictionaries with file information.
     """
     files_data = []
