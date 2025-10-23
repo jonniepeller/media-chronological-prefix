@@ -33,8 +33,10 @@ EXAMPLES:
     # Process videos in a specific folder
     python3 media_chronological_rename.py ~/Videos/vacation_2024
 
-TODO:
-    Need to ignore hidden files like .DS_Store on Mac
+NOTE:
+    Hidden files and system files are automatically ignored:
+    - Mac/Linux: Files starting with . (e.g., .DS_Store)
+    - Windows: Thumbs.db, desktop.ini, and other common system files
 """
 
 import os
@@ -80,16 +82,12 @@ def check_dependencies():
 
     print("\nTo run this script, you need to install the missing packages.")
 
-    while True:
-        response = input("\nWould you like to install them now? (y/n): ").lower().strip()
-        if response in ['y', 'yes']:
-            return install_dependencies()
-        elif response in ['n', 'no']:
-            print("\nPlease install the dependencies manually:")
-            print(f"  pip install {' '.join(MISSING_DEPS)}")
-            return False
-        else:
-            print("Please enter 'y' or 'n'.")
+    if prompt_yes_no("Would you like to install them now?", cancel_message=None):
+        return install_dependencies()
+    else:
+        print("\nPlease install the dependencies manually:")
+        print(f"  pip install {' '.join(MISSING_DEPS)}")
+        return False
 
 
 def install_dependencies():
@@ -169,15 +167,71 @@ def get_capture_date(filepath):
     return None
 
 
+def should_ignore_file(filename):
+    """
+    Check if a file should be ignored based on common hidden/system files.
+    Returns True if the file should be ignored, False otherwise.
+    """
+    # Ignore hidden files (starting with .)
+    if filename.startswith('.'):
+        return True
+
+    # Ignore common Windows system files (case-insensitive)
+    windows_system_files = {
+        'thumbs.db',
+        'desktop.ini',
+        'thumbs.db:encryptable',
+        'ethumbs.db',
+        'ethumbs_vista.db',
+        '$recycle.bin',
+        'system volume information',
+        'pagefile.sys',
+        'hiberfil.sys',
+        'swapfile.sys'
+    }
+
+    if filename.lower() in windows_system_files:
+        return True
+
+    return False
+
+
+def get_filtered_files(directory="."):
+    """
+    Get list of non-ignored files in the given directory.
+    Returns a list of filenames (excludes subdirectories, hidden files, and system files).
+    """
+    items = os.listdir(directory)
+    files = [item for item in items
+            if os.path.isfile(os.path.join(directory, item))
+            and not should_ignore_file(item)]
+    return files
+
+
+def prompt_yes_no(question, cancel_message="Operation cancelled."):
+    """
+    Prompt user for yes/no confirmation.
+    Returns True for yes, False for no.
+    """
+    while True:
+        response = input(f"\n{question} (y/n): ").lower().strip()
+        if response in ['y', 'yes']:
+            return True
+        elif response in ['n', 'no']:
+            if cancel_message:
+                print(cancel_message)
+            return False
+        else:
+            print("Please enter 'y' or 'n'.")
+
+
 def get_file_list(directory="."):
     """
-    Get list of files in the given directory (excluding subdirectories).
+    Get list of files in the given directory (excluding subdirectories, hidden files, and system files).
     Returns a list of filenames.
     """
     try:
-        items = os.listdir(directory)
-        files = [item for item in items if os.path.isfile(os.path.join(directory, item))]
-        return files
+        return get_filtered_files(directory)
     except Exception as e:
         print(f"Error listing files: {e}")
         sys.exit(1)
@@ -185,14 +239,13 @@ def get_file_list(directory="."):
 
 def get_file_metadata(directory="."):
     """
-    Get metadata for all files in the directory.
+    Get metadata for all files in the directory (excluding hidden files and system files).
     Returns a list of dictionaries with file information.
     """
     files_data = []
 
     try:
-        items = os.listdir(directory)
-        files = [item for item in items if os.path.isfile(os.path.join(directory, item))]
+        files = get_filtered_files(directory)
 
         for filename in files:
             filepath = os.path.join(directory, filename)
@@ -242,15 +295,7 @@ def confirm_continue(file_count, file_list):
 
     print(f"\nThis script will attempt to rename all {file_count} file(s).")
 
-    while True:
-        response = input("\nDo you want to continue? (y/n): ").lower().strip()
-        if response in ['y', 'yes']:
-            return True
-        elif response in ['n', 'no']:
-            print("Operation cancelled.")
-            return False
-        else:
-            print("Please enter 'y' or 'n'.")
+    return prompt_yes_no("Do you want to continue?")
 
 
 def generate_new_filename(file_info, existing_names):
@@ -319,15 +364,7 @@ def confirm_missing_capture_dates(files_data):
     print(f"\nFiles with capture dates: {len(files_data) - len(missing_capture)}/{len(files_data)}")
     print(f"Files using fallback dates: {len(missing_capture)}/{len(files_data)}")
 
-    while True:
-        response = input("\nDo you want to continue with renaming? (y/n): ").lower().strip()
-        if response in ['y', 'yes']:
-            return True
-        elif response in ['n', 'no']:
-            print("Operation cancelled.")
-            return False
-        else:
-            print("Please enter 'y' or 'n'.")
+    return prompt_yes_no("Do you want to continue with renaming?")
 
 
 def preview_renames(files_data):
@@ -350,15 +387,7 @@ def preview_renames(files_data):
 
     print(f"\nTotal files to rename: {len(files_data)}")
 
-    while True:
-        response = input("\nProceed with renaming? (y/n): ").lower().strip()
-        if response in ['y', 'yes']:
-            return True
-        elif response in ['n', 'no']:
-            print("Operation cancelled.")
-            return False
-        else:
-            print("Please enter 'y' or 'n'.")
+    return prompt_yes_no("Proceed with renaming?")
 
 
 def rename_files(files_data, target_dir):
