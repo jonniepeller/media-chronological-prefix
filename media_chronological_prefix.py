@@ -31,6 +31,7 @@ except ImportError:
     createParser = None
     extractMetadata = None
 
+NUM_FILES_TO_PREVIEW = 3
 
 def print_heading(message):
     if(message):
@@ -39,20 +40,18 @@ def print_heading(message):
         print("=" * 60)
 
 
-def check_dependencies():
+def ensure_dependencies():
     """
-    Check if required dependencies are installed and offer to install them.
-    Returns True if all required dependencies are available, False otherwise.
+    Check if required dependencies are installed, offer to install them, then take that action.
+    Returns True if installed, False otherwise.
     """
     if not MISSING_DEPS:
         return True
 
     print_heading("MISSING REQUIRED DEPENDENCIES")
-    print("\nThe following required packages are not installed:")
+    print("\nThe following required to run this script packages are not installed:")
     for dep in MISSING_DEPS:
         print(f"  - {dep}")
-
-    print("\nTo run this script, you need to install the missing packages.")
 
     if prompt_yes_no("Would you like to install them now?", cancel_message=None):
         return install_dependencies()
@@ -87,10 +86,10 @@ def install_dependencies():
 
         print_heading("All dependencies installed successfully!")
         print("Please restart the script to use the newly installed packages.")
-        return False  # Return False so script exits and user restarts it
+        return False
 
     except Exception as e:
-        print(f"\nError during installation: {e}")
+        print_heading(f"\nError during installation: {e}")
         print("\nPlease install the dependencies manually:")
         print(f"  pip install {' '.join(MISSING_DEPS)}")
         return False
@@ -98,7 +97,7 @@ def install_dependencies():
 
 def get_capture_date(filepath):
     """
-    Extract the capture date from EXIF/metadata of image or video files.
+    Extract capture date from images and videos.
     Returns datetime object if found, None otherwise.
     Tries multiple methods:
     1. PIL/Pillow for images (JPEG, PNG, etc.)
@@ -126,7 +125,6 @@ def get_capture_date(filepath):
             if parser:
                 metadata = extractMetadata(parser)
                 if metadata:
-                    # Try to get creation date
                     creation_date = metadata.get('creation_date')
                     if creation_date:
                         return creation_date
@@ -152,18 +150,16 @@ def is_media_file(filepath):
 
 def is_already_prefixed(filename):
     """
-    Check if a file has already been prefixed with the chronological format.
-    Expected format: YYYY-MM-DD HH:MM:SS[.mmm] original_name.ext
-    Returns True if the filename matches the pattern, False otherwise.
+    Check if a file has already been prefixed with this exact format:
+        YYYY-MM-DD HH-MM-SS original_name.ext
+    Returns True if it matches, False otherwise.
     """
-    # Pattern matches: YYYY-MM-DD HH:MM:SS or YYYY-MM-DD HH:MM:SS.mmm at the start
-    # followed by a space and then the rest of the filename
-    pattern = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{3})? .+'
+    pattern = r'^\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2} .+'
 
     return bool(re.match(pattern, filename))
 
 
-def get_filtered_files(directory=".", include_already_prefixed=True):
+def get_filtered_files(directory, include_already_prefixed=True):
     """
     Get list of media files (photos/videos) in the given directory.
     Returns a list of filenames (excludes subdirectories and non-media files).
@@ -197,7 +193,7 @@ def prompt_yes_no(question, cancel_message="Operation cancelled."):
             print("Please enter 'y' or 'n'.")
 
 
-def get_file_list(directory="."):
+def get_file_list(directory):
     """
     Get list of media files in the given directory (photos and videos only).
     Excludes subdirectories and non-media files.
@@ -210,7 +206,7 @@ def get_file_list(directory="."):
         sys.exit(1)
 
 
-def get_file_metadata(directory="."):
+def get_file_metadata(directory):
     """
     Get metadata for all media files in the directory (photos and videos only).
     Excludes non-media files.
@@ -257,23 +253,23 @@ def get_file_metadata(directory="."):
 
 def confirm_already_prefixed_files(already_prefixed_files):
     """
-    Check for files already prefixed with chronological format and ask user what to do.
-    Returns: 'ignore', 'prefix_anyway', or 'quit'
+    Check for files already prefixed with chronological format,
+     then if any area found, ask user what to do, then return their
+     selected preference.
+    Returns: 'ignore', 'prefix_anyway', or 'quit'.
     """
     if not already_prefixed_files:
         return 'ignore'  # No already-prefixed files, proceed normally
 
     print_heading("WARNING: Already-Prefixed Files Detected")
-    print(f"\n{len(already_prefixed_files)} file(s) already have chronological prefixes.")
-    print("These files appear to have already been processed by this script.\n")
+    print(f"\n{len(already_prefixed_files)} file(s) already appear to have been processed by this script.\n")
 
-    # Show first up to 5 already-prefixed files
+    # Show first NUMBER_OF_FILES_TO_PREVIEW already-prefixed files
     print("Already-prefixed files:")
-    for i, filename in enumerate(already_prefixed_files[:5], 1):
+    for i, filename in enumerate(already_prefixed_files[:NUM_FILES_TO_PREVIEW], 1):
         print(f"  {i}. {filename}")
-
-    if len(already_prefixed_files) > 5:
-        print(f"  ... and {len(already_prefixed_files) - 5} more")
+    if len(already_prefixed_files) > NUM_FILES_TO_PREVIEW:
+        print(f"  ... and {len(already_prefixed_files) - NUM_FILES_TO_PREVIEW} more")
 
     print("\nWhat would you like to do?")
     print("  1. Ignore these files (only prefix files without chronological prefix)")
@@ -281,7 +277,7 @@ def confirm_already_prefixed_files(already_prefixed_files):
     print("  3. Stop and quit")
 
     while True:
-        response = input("\nEnter your choice (1/2/3): ").strip()
+        response = input("\nEnter your choice (1, 2, or 3): ").strip()
         if response == '1':
             return 'ignore'
         elif response == '2':
@@ -297,13 +293,13 @@ def confirm_continue(file_count, file_list):
     """Ask user for initial confirmation before proceeding."""
     print(f"\nFound {file_count} media file(s) to process.")
 
-    # Show first up to 3 files
+    # Preview NUMBER_OF_FILES_TO_PREVIEW files
     if file_list:
         print("\nSample files:")
-        for i, filename in enumerate(file_list[:3], 1):
+        for i, filename in enumerate(file_list[:NUM_FILES_TO_PREVIEW], 1):
             print(f"  {i}. {filename}")
-        if file_count > 3:
-            print(f"  ... and {file_count - 3} more")
+        if file_count > NUM_FILES_TO_PREVIEW:
+            print(f"  ... and {file_count - NUM_FILES_TO_PREVIEW} more")
 
     print(f"\nThis script will attempt to prefix {file_count} file(s) with chronological dates.")
 
@@ -312,27 +308,20 @@ def confirm_continue(file_count, file_list):
 
 def generate_prefixed_filename(file_info, existing_names):
     """
-    Generate a new filename with chronological date prefix.
-    Format: YYYY-MM-DD HH:MM:SS original_filename.ext (24-hour time)
-    Includes milliseconds if available.
+    Generate a new filename with date prefix.
+    Format: YYYY-MM-DD HH-MM-SS original_filename.ext (24-hour time)
     Handles collisions by adding a counter suffix.
     """
+    # Get the data
     final_date = file_info['final_date']
     original_filename = file_info['filename']
 
-    # Format: YYYY-MM-DD HH:MM:SS (24-hour time)
-    # Try to include microseconds if available
-    if hasattr(final_date, 'microsecond') and final_date.microsecond > 0:
-        # Convert microseconds to milliseconds (first 3 digits)
-        milliseconds = final_date.microsecond // 1000
-        date_prefix = final_date.strftime(f'%Y-%m-%d %H:%M:%S.{milliseconds:03d}')
-    else:
-        date_prefix = final_date.strftime('%Y-%m-%d %H:%M:%S')
-
-    # Create new filename
+    # Make the filename
+    date_prefix = final_date.strftime('%Y-%m-%d %H-%M-%S')
     new_filename = f"{date_prefix} {original_filename}"
 
     # Handle collisions - if filename already exists, add counter
+    # Not currently possible, but if sub-directories are added, this could become an issue.
     if new_filename in existing_names:
         base_name, extension = os.path.splitext(original_filename)
         counter = 1
@@ -357,23 +346,21 @@ def confirm_missing_capture_dates(files_data):
         # All files have capture dates
         return True
 
-    # Some files are missing capture dates
+    # Some files are missing capture dates...
+    # Inform the user
     print_heading("WARNING: Files with Missing Capture Dates")
-    print(f"\n{len(missing_capture)} file(s) do not have capture date metadata.")
-    print("These files will use modified date or created date instead.\n")
+    print(f"{len(missing_capture)} file(s) do not have capture date metadata.")
+    print("These files will use date modified if available, otherwise date created.")
 
-    # Show first up to 5 files without capture dates
+    # Show the first NUMBER_OF_FILES_TO_PREVIEW files without capture dates
     print("Files without capture dates:")
-    for i, file_info in enumerate(missing_capture[:5], 1):
+    for i, file_info in enumerate(missing_capture[:NUM_FILES_TO_PREVIEW], 1):
         fallback = "modified date" if file_info['final_date'] == file_info['modified_date'] else "created date"
         print(f"  {i}. {file_info['filename']} (will use {fallback})")
+    if len(missing_capture) > NUM_FILES_TO_PREVIEW:
+        print(f"  ... and {len(missing_capture) - NUM_FILES_TO_PREVIEW} more")
 
-    if len(missing_capture) > 5:
-        print(f"  ... and {len(missing_capture) - 5} more")
-
-    print(f"\nFiles with capture dates: {len(files_data) - len(missing_capture)}/{len(files_data)}")
-    print(f"Files using fallback dates: {len(missing_capture)}/{len(files_data)}")
-
+    # Ask the user what they'd like to do
     return prompt_yes_no("Do you want to continue with prefixing?")
 
 def confirm_prefixes(files_data):
@@ -382,19 +369,16 @@ def confirm_prefixes(files_data):
     Returns True to continue, False to cancel.
     """
     print_heading("Preview of Prefixed Filenames")
-    print("\nShowing first up to 5 files:\n")
+    print(f"\nShowing first {NUM_FILES_TO_PREVIEW} files:\n")
 
-    for i, file_info in enumerate(files_data[:5], 1):
+    for i, file_info in enumerate(files_data[:NUM_FILES_TO_PREVIEW], 1):
         print(f"{i}. {file_info['filename']}")
         print(f"   → {file_info['new_filename']}")
         print()
+    if len(files_data) > NUM_FILES_TO_PREVIEW:
+        print(f"... and {len(files_data) - NUM_FILES_TO_PREVIEW} more files will be prefixed")
 
-    if len(files_data) > 5:
-        print(f"... and {len(files_data) - 5} more files will be prefixed")
-
-    print(f"\nTotal files to prefix: {len(files_data)}")
-
-    return prompt_yes_no("Proceed with prefixing?")
+    return prompt_yes_no(f"Proceed with prefixing {len(files_data)} files?")
 
 
 def prefix_files(files_data, target_dir):
@@ -421,10 +405,10 @@ def prefix_files(files_data, target_dir):
 
     if errors:
         print(f"\nErrors ({len(errors)}):")
-        for filename, error in errors[:5]:
+        for filename, error in errors[:NUM_FILES_TO_PREVIEW]:
             print(f"  - {filename}: {error}")
-        if len(errors) > 5:
-            print(f"  ... and {len(errors) - 5} more errors")
+        if len(errors) > NUM_FILES_TO_PREVIEW:
+            print(f"  ... and {len(errors) - NUM_FILES_TO_PREVIEW} more errors")
 
     return prefixed_count
 
@@ -432,7 +416,7 @@ def prefix_files(files_data, target_dir):
 def main():
     """Main function to run from the command line, in Python 3."""
     parser = argparse.ArgumentParser(
-        description="Prefix media files with chronological dates based on capture date—if this isn't available, fallback to modified, then created dates."
+        description="Prefix media files with chronological dates (YYYY-MM-DD HH-MM-SS) based on capture date—if this isn't available, fallback to modified, then created dates."
     )
     parser.add_argument(
         'path',
@@ -446,7 +430,7 @@ def main():
 
     # Check dependencies
     print("Checking if you have the necessary libraries already installed...")
-    if not check_dependencies():
+    if not ensure_dependencies():
         sys.exit(1)
 
     # Get and validate target directory
