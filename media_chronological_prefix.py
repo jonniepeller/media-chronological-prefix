@@ -31,9 +31,14 @@ except ImportError:
     createParser = None
     extractMetadata = None
 
-NUM_FILES_TO_PREVIEW = 3
+NUM_ITEMS_TO_PREVIEW = 3
 
 def print_heading(message):
+    """Print a formatted heading with separator lines.
+
+    Args:
+        message: The heading text to display
+    """
     if(message):
         print("\n" + "=" * 60)
         print(message)
@@ -41,9 +46,10 @@ def print_heading(message):
 
 
 def ensure_dependencies():
-    """
-    Check if required dependencies are installed, offer to install them, then take that action.
-    Returns True if installed, False otherwise.
+    """Check if required dependencies are installed and offer to install them.
+
+    Returns:
+        True if dependencies are already installed, False otherwise
     """
     if not MISSING_DEPS:
         return True
@@ -62,9 +68,10 @@ def ensure_dependencies():
 
 
 def install_dependencies():
-    """
-    Attempt to install missing dependencies using pip.
-    Returns True if successful, False otherwise.
+    """Attempt to install missing dependencies using pip.
+
+    Returns:
+        True if successful, False otherwise
     """
     print("\nAttempting to install missing dependencies...")
 
@@ -96,12 +103,17 @@ def install_dependencies():
 
 
 def get_capture_date(filepath):
-    """
-    Extract capture date from images and videos.
-    Returns datetime object if found, None otherwise.
+    """Extract capture date from images and videos.
+
     Tries multiple methods:
     1. PIL/Pillow for images (JPEG, PNG, etc.)
     2. Hachoir for videos and other media files
+
+    Args:
+        filepath: Full path to the media file
+
+    Returns:
+        datetime object if capture date found, None otherwise
     """
     # Try PIL for images first
     try:
@@ -136,9 +148,13 @@ def get_capture_date(filepath):
 
 
 def is_media_file(filepath):
-    """
-    Check if a file is a photo or video based on MIME type.
-    Returns True if the file is image/* or video/*, False otherwise.
+    """Check if a file is a photo or video based on MIME type.
+
+    Args:
+        filepath: Full path to the file to check
+
+    Returns:
+        True if the file is image/* or video/*, False otherwise
     """
     mime_type, _ = mimetypes.guess_type(filepath)
 
@@ -149,10 +165,15 @@ def is_media_file(filepath):
 
 
 def is_already_prefixed(filename):
-    """
-    Check if a file has already been prefixed with this exact format:
-        YYYY-MM-DD HH-MM-SS original_name.ext
-    Returns True if it matches, False otherwise.
+    """Check if a file has already been prefixed with chronological format.
+
+    Format checked: YYYY-MM-DD HH-MM-SS original_name.ext
+
+    Args:
+        filename: The filename (not full path) to check
+
+    Returns:
+        True if filename matches the prefix format, False otherwise
     """
     pattern = r'^\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2} .+'
 
@@ -160,10 +181,16 @@ def is_already_prefixed(filename):
 
 
 def get_media_files(directory, include_already_prefixed=True):
-    """
-    Get list of media files (photos/videos) in the given directory.
-    Returns a list of fully qualified file paths (excludes subdirectories and non-media files).
-    If include_already_prefixed is False, excludes files already prefixed with chronological format.
+    """Get list of media files (photos/videos) in the given directory.
+
+    Excludes subdirectories and non-media files.
+
+    Args:
+        directory: Directory path to scan for media files
+        include_already_prefixed: If False, excludes files already prefixed with chronological format
+
+    Returns:
+        List of fully qualified file paths
     """
     items = os.listdir(directory)
     files = [os.path.join(directory, item) for item in items
@@ -177,10 +204,13 @@ def get_media_files(directory, include_already_prefixed=True):
 
 
 def prompt_yes_no(question):
-    """
-    Prompt user for yes/no confirmation of given question.
-    Args: question - Question to ask the user.
-    Returns: True for yes, False for no.
+    """Prompt user for yes/no confirmation.
+
+    Args:
+        question: Question to ask the user
+
+    Returns:
+        True for yes, False for no
     """
     while True:
         response = input(f"\n{question} (y/n): ").lower().strip()
@@ -193,11 +223,13 @@ def prompt_yes_no(question):
 
 
 def get_file_metadata(file_paths):
-    """
-    Get metadata for specified files.
+    """Get metadata for specified files.
 
-    Args: file_paths - List of fully qualified file paths to process
-    Returns: List of dictionaries with file information
+    Args:
+        file_paths: List of fully qualified file paths to process
+
+    Returns:
+        List of dictionaries with file information including dates and paths
     """
     files_data = []
 
@@ -237,12 +269,16 @@ def get_file_metadata(file_paths):
 
 
 def confirm_already_prefixed_files(already_prefixed_files):
-    """
-    Check for files already prefixed with chronological format,
-    then if any are found, ask user what to do, then return their selected preference.
+    """Check for already-prefixed files and ask user how to handle them.
 
-    Args: already_prefixed_files - List of file paths that are already prefixed
-    Returns: 'ignore', 'prefix_anyway', or 'quit'
+    If any files are found with chronological prefixes, prompts user to choose
+    whether to ignore them, prefix anyway, or quit.
+
+    Args:
+        already_prefixed_files: List of file paths that are already prefixed
+
+    Returns:
+        'ignore', 'prefix_anyway', or 'quit'
     """
     if not already_prefixed_files:
         return 'ignore'  # No already-prefixed files, proceed normally
@@ -250,12 +286,12 @@ def confirm_already_prefixed_files(already_prefixed_files):
     print_heading("WARNING: Already-Prefixed Files Detected")
     print(f"\n{len(already_prefixed_files)} file(s) already appear to have been processed by this script.\n")
 
-    # Show first NUM_FILES_TO_PREVIEW already-prefixed files
+    # Show first NUM_ITEMS_TO_PREVIEW already-prefixed files
     print("Already-prefixed files:")
-    for i, filepath in enumerate(already_prefixed_files[:NUM_FILES_TO_PREVIEW], 1):
+    for i, filepath in enumerate(already_prefixed_files[:NUM_ITEMS_TO_PREVIEW], 1):
         print(f"  {i}. {os.path.basename(filepath)}")
-    if len(already_prefixed_files) > NUM_FILES_TO_PREVIEW:
-        print(f"  ... and {len(already_prefixed_files) - NUM_FILES_TO_PREVIEW} more")
+    if len(already_prefixed_files) > NUM_ITEMS_TO_PREVIEW:
+        print(f"  ... and {len(already_prefixed_files) - NUM_ITEMS_TO_PREVIEW} more")
 
     print("\nWhat would you like to do?")
     print("  1. Ignore these files (only prefix files without chronological prefix)")
@@ -275,21 +311,26 @@ def confirm_already_prefixed_files(already_prefixed_files):
 
 
 def confirm_continue(file_count, file_list):
-    """
-    Ask user for initial confirmation before proceeding.
+    """Ask user for initial confirmation before proceeding with prefixing.
 
-    Args: file_count - Number of files; file_list - List of file paths
-    Returns: True to continue, False to cancel
+    Shows a sample of files and total count.
+
+    Args:
+        file_count: Number of files to process
+        file_list: List of file paths to process
+
+    Returns:
+        True to continue, False to cancel
     """
     print(f"\nFound {file_count} media file(s) to process.")
 
-    # Preview NUM_FILES_TO_PREVIEW files
+    # Preview NUM_ITEMS_TO_PREVIEW files
     if file_list:
         print("\nSample files:")
-        for i, filepath in enumerate(file_list[:NUM_FILES_TO_PREVIEW], 1):
+        for i, filepath in enumerate(file_list[:NUM_ITEMS_TO_PREVIEW], 1):
             print(f"  {i}. {os.path.basename(filepath)}")
-        if file_count > NUM_FILES_TO_PREVIEW:
-            print(f"  ... and {file_count - NUM_FILES_TO_PREVIEW} more")
+        if file_count > NUM_ITEMS_TO_PREVIEW:
+            print(f"  ... and {file_count - NUM_ITEMS_TO_PREVIEW} more")
 
     print(f"\nThis script will attempt to prefix {file_count} file(s) with chronological dates.")
 
@@ -297,10 +338,17 @@ def confirm_continue(file_count, file_list):
 
 
 def generate_prefixed_filename(file_info, existing_names):
-    """
-    Generate a new filename with date prefix.
+    """Generate a new filename with chronological date prefix.
+
     Format: YYYY-MM-DD HH-MM-SS original_filename.ext (24-hour time)
-    Handles collisions by adding a counter suffix.
+    Handles filename collisions by adding a counter suffix.
+
+    Args:
+        file_info: Dictionary containing file metadata including 'final_date' and 'filename'
+        existing_names: Set of filenames already generated (to avoid collisions)
+
+    Returns:
+        New filename with date prefix
     """
     # Get the data
     final_date = file_info['final_date']
@@ -325,9 +373,16 @@ def generate_prefixed_filename(file_info, existing_names):
 
 
 def confirm_missing_capture_dates(files_data):
-    """
-    Check for files with missing capture dates and ask user for confirmation.
-    Returns True to continue, False to cancel.
+    """Check for files with missing capture dates and ask user for confirmation.
+
+    Shows files that will use fallback dates (modified or created) instead of
+    capture dates from EXIF/metadata.
+
+    Args:
+        files_data: List of file info dictionaries with metadata
+
+    Returns:
+        True to continue, False to cancel
     """
     # Find files without capture dates
     missing_capture = [f for f in files_data if f['capture_date'] is None]
@@ -342,41 +397,47 @@ def confirm_missing_capture_dates(files_data):
     print(f"{len(missing_capture)} file(s) do not have capture date metadata.")
     print("These files will use date modified if available, otherwise date created.")
 
-    # Show the first NUM_FILES_TO_PREVIEW files without capture dates
+    # Show the first NUM_ITEMS_TO_PREVIEW files without capture dates
     print("\nFiles without capture dates:")
-    for i, file_info in enumerate(missing_capture[:NUM_FILES_TO_PREVIEW], 1):
+    for i, file_info in enumerate(missing_capture[:NUM_ITEMS_TO_PREVIEW], 1):
         fallback = "modified date" if file_info['final_date'] == file_info['modified_date'] else "created date"
         print(f"  {i}. {file_info['filename']} (will use {fallback})")
-    if len(missing_capture) > NUM_FILES_TO_PREVIEW:
-        print(f"  ... and {len(missing_capture) - NUM_FILES_TO_PREVIEW} more")
+    if len(missing_capture) > NUM_ITEMS_TO_PREVIEW:
+        print(f"  ... and {len(missing_capture) - NUM_ITEMS_TO_PREVIEW} more")
 
     # Ask the user what they'd like to do
     return prompt_yes_no("Do you want to continue with prefixing?")
 
 def confirm_prefixes(files_data):
-    """
-    Show a preview of the prefixed filenames and ask for final confirmation.
-    Returns True to continue, False to cancel.
+    """Show a preview of the prefixed filenames and ask for final confirmation.
+
+    Args:
+        files_data: List of file info dictionaries with original and new filenames
+
+    Returns:
+        True to continue, False to cancel
     """
     print_heading("Preview of Prefixed Filenames")
-    print(f"\nShowing first {NUM_FILES_TO_PREVIEW} files:\n")
+    print(f"\nShowing first {NUM_ITEMS_TO_PREVIEW} files:\n")
 
-    for i, file_info in enumerate(files_data[:NUM_FILES_TO_PREVIEW], 1):
+    for i, file_info in enumerate(files_data[:NUM_ITEMS_TO_PREVIEW], 1):
         print(f"{i}. {file_info['filename']}")
         print(f"   → {file_info['new_filename']}")
         print()
-    if len(files_data) > NUM_FILES_TO_PREVIEW:
-        print(f"... and {len(files_data) - NUM_FILES_TO_PREVIEW} more files will be prefixed")
+    if len(files_data) > NUM_ITEMS_TO_PREVIEW:
+        print(f"... and {len(files_data) - NUM_ITEMS_TO_PREVIEW} more files will be prefixed")
 
     return prompt_yes_no(f"Proceed with prefixing {len(files_data)} files?")
 
 
 def prefix_files(files_data):
-    """
-    Perform the actual file prefixing (renaming with date prefix).
+    """Perform the actual file prefixing (renaming with date prefix).
 
-    Args: files_data - List of file info dictionaries with metadata and new filenames
-    Returns: Count of successfully prefixed files
+    Args:
+        files_data: List of file info dictionaries with metadata and new filenames
+
+    Returns:
+        Count of successfully prefixed files
     """
     prefixed_count = 0
     errors = []
@@ -399,10 +460,10 @@ def prefix_files(files_data):
 
     if errors:
         print(f"\nErrors ({len(errors)}):")
-        for filename, error in errors[:NUM_FILES_TO_PREVIEW]:
+        for filename, error in errors[:NUM_ITEMS_TO_PREVIEW]:
             print(f"  - {filename}: {error}")
-        if len(errors) > NUM_FILES_TO_PREVIEW:
-            print(f"  ... and {len(errors) - NUM_FILES_TO_PREVIEW} more errors")
+        if len(errors) > NUM_ITEMS_TO_PREVIEW:
+            print(f"  ... and {len(errors) - NUM_ITEMS_TO_PREVIEW} more errors")
 
     return prefixed_count
 
