@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Media Chronological Rename
+Media Chronological Prefix
 See README.md for docs
 """
 
@@ -32,6 +32,13 @@ except ImportError:
     extractMetadata = None
 
 
+def print_heading(message):
+    if(message):
+        print("\n" + "=" * 60)
+        print(message)
+        print("=" * 60)
+
+
 def check_dependencies():
     """
     Check if required dependencies are installed and offer to install them.
@@ -40,9 +47,7 @@ def check_dependencies():
     if not MISSING_DEPS:
         return True
 
-    print("\n" + "=" * 50)
-    print("MISSING REQUIRED DEPENDENCIES")
-    print("=" * 50)
+    print_heading("MISSING REQUIRED DEPENDENCIES")
     print("\nThe following required packages are not installed:")
     for dep in MISSING_DEPS:
         print(f"  - {dep}")
@@ -80,10 +85,8 @@ def install_dependencies():
                 print(f"  Error: {result.stderr}")
                 return False
 
-        print("\n" + "=" * 50)
-        print("All dependencies installed successfully!")
+        print_heading("All dependencies installed successfully!")
         print("Please restart the script to use the newly installed packages.")
-        print("=" * 50)
         return False  # Return False so script exits and user restarts it
 
     except Exception as e:
@@ -147,9 +150,9 @@ def is_media_file(filepath):
     return False
 
 
-def is_already_named_this_way(filename):
+def is_already_prefixed(filename):
     """
-    Check if a file has already been renamed with the chronological prefix format.
+    Check if a file has already been prefixed with the chronological format.
     Expected format: YYYY-MM-DD HH:MM:SS[.mmm] original_name.ext
     Returns True if the filename matches the pattern, False otherwise.
     """
@@ -160,19 +163,19 @@ def is_already_named_this_way(filename):
     return bool(re.match(pattern, filename))
 
 
-def get_filtered_files(directory=".", include_already_renamed=True):
+def get_filtered_files(directory=".", include_already_prefixed=True):
     """
     Get list of media files (photos/videos) in the given directory.
     Returns a list of filenames (excludes subdirectories and non-media files).
-    If include_already_renamed is False, excludes files already named with chronological prefix.
+    If include_already_prefixed is False, excludes files already prefixed with chronological format.
     """
     items = os.listdir(directory)
     files = [item for item in items
             if os.path.isfile(os.path.join(directory, item))
             and is_media_file(os.path.join(directory, item))]
 
-    if not include_already_renamed:
-        files = [f for f in files if not is_already_named_this_way(f)]
+    if not include_already_prefixed:
+        files = [f for f in files if not is_already_prefixed(f)]
 
     return files
 
@@ -252,30 +255,28 @@ def get_file_metadata(directory="."):
         sys.exit(1)
 
 
-def confirm_already_renamed_files(already_renamed_files):
+def confirm_already_prefixed_files(already_prefixed_files):
     """
-    Check for files already named with chronological prefix and ask user what to do.
-    Returns: 'ignore', 'rename_anyway', or 'quit'
+    Check for files already prefixed with chronological format and ask user what to do.
+    Returns: 'ignore', 'prefix_anyway', or 'quit'
     """
-    if not already_renamed_files:
-        return 'ignore'  # No already-renamed files, proceed normally
+    if not already_prefixed_files:
+        return 'ignore'  # No already-prefixed files, proceed normally
 
-    print("\n" + "=" * 60)
-    print("WARNING: Already-Renamed Files Detected")
-    print("=" * 60)
-    print(f"\n{len(already_renamed_files)} file(s) already have chronological prefixes.")
+    print_heading("WARNING: Already-Prefixed Files Detected")
+    print(f"\n{len(already_prefixed_files)} file(s) already have chronological prefixes.")
     print("These files appear to have already been processed by this script.\n")
 
-    # Show first up to 5 already-renamed files
-    print("Already-renamed files:")
-    for i, filename in enumerate(already_renamed_files[:5], 1):
+    # Show first up to 5 already-prefixed files
+    print("Already-prefixed files:")
+    for i, filename in enumerate(already_prefixed_files[:5], 1):
         print(f"  {i}. {filename}")
 
-    if len(already_renamed_files) > 5:
-        print(f"  ... and {len(already_renamed_files) - 5} more")
+    if len(already_prefixed_files) > 5:
+        print(f"  ... and {len(already_prefixed_files) - 5} more")
 
     print("\nWhat would you like to do?")
-    print("  1. Ignore these files (only rename files without chronological prefix)")
+    print("  1. Ignore these files (only prefix files without chronological prefix)")
     print("  2. Add prefix anyway (will add another date prefix)")
     print("  3. Stop and quit")
 
@@ -284,7 +285,7 @@ def confirm_already_renamed_files(already_renamed_files):
         if response == '1':
             return 'ignore'
         elif response == '2':
-            return 'rename_anyway'
+            return 'prefix_anyway'
         elif response == '3':
             print("Operation cancelled.")
             return 'quit'
@@ -304,14 +305,14 @@ def confirm_continue(file_count, file_list):
         if file_count > 3:
             print(f"  ... and {file_count - 3} more")
 
-    print(f"\nThis script will attempt to rename {file_count} file(s).")
+    print(f"\nThis script will attempt to prefix {file_count} file(s) with chronological dates.")
 
     return prompt_yes_no("Do you want to continue?")
 
 
-def generate_new_filename(file_info, existing_names):
+def generate_prefixed_filename(file_info, existing_names):
     """
-    Generate a new filename with date prefix.
+    Generate a new filename with chronological date prefix.
     Format: YYYY-MM-DD HH:MM:SS original_filename.ext (24-hour time)
     Includes milliseconds if available.
     Handles collisions by adding a counter suffix.
@@ -357,9 +358,7 @@ def confirm_missing_capture_dates(files_data):
         return True
 
     # Some files are missing capture dates
-    print("\n" + "=" * 60)
-    print("WARNING: Files with Missing Capture Dates")
-    print("=" * 60)
+    print_heading("WARNING: Files with Missing Capture Dates")
     print(f"\n{len(missing_capture)} file(s) do not have capture date metadata.")
     print("These files will use modified date or created date instead.\n")
 
@@ -375,18 +374,15 @@ def confirm_missing_capture_dates(files_data):
     print(f"\nFiles with capture dates: {len(files_data) - len(missing_capture)}/{len(files_data)}")
     print(f"Files using fallback dates: {len(missing_capture)}/{len(files_data)}")
 
-    return prompt_yes_no("Do you want to continue with renaming?")
+    return prompt_yes_no("Do you want to continue with prefixing?")
 
-
-def preview_renames(files_data):
+def confirm_prefixes(files_data):
     """
-    Show a preview of the renames and ask for final confirmation.
+    Show a preview of the prefixed filenames and ask for final confirmation.
     Returns True to continue, False to cancel.
     """
-    print("\n" + "=" * 60)
-    print("Preview of Renaming")
-    print("=" * 60)
-    print("\nShowing first up to 5 renames:\n")
+    print_heading("Preview of Prefixed Filenames")
+    print("\nShowing first up to 5 files:\n")
 
     for i, file_info in enumerate(files_data[:5], 1):
         print(f"{i}. {file_info['filename']}")
@@ -394,22 +390,20 @@ def preview_renames(files_data):
         print()
 
     if len(files_data) > 5:
-        print(f"... and {len(files_data) - 5} more files will be renamed")
+        print(f"... and {len(files_data) - 5} more files will be prefixed")
 
-    print(f"\nTotal files to rename: {len(files_data)}")
+    print(f"\nTotal files to prefix: {len(files_data)}")
 
-    return prompt_yes_no("Proceed with renaming?")
+    return prompt_yes_no("Proceed with prefixing?")
 
 
-def rename_files(files_data, target_dir):
+def prefix_files(files_data, target_dir):
     """
-    Perform the actual file renaming.
-    Returns count of successfully renamed files.
+    Perform the actual file prefixing (renaming with date prefix).
+    Returns count of successfully prefixed files.
     """
-    renamed_count = 0
+    prefixed_count = 0
     errors = []
-
-    print("\nRenaming files...")
 
     for file_info in files_data:
         old_path = file_info['original_path']
@@ -417,15 +411,13 @@ def rename_files(files_data, target_dir):
 
         try:
             os.rename(old_path, new_path)
-            renamed_count += 1
+            prefixed_count += 1
         except Exception as e:
             errors.append((file_info['filename'], str(e)))
 
     # Display results
-    print("\n" + "=" * 60)
-    print("Renaming Complete")
-    print("=" * 60)
-    print(f"\nSuccessfully renamed: {renamed_count}/{len(files_data)} files")
+    print_heading("Prefixing Complete")
+    print(f"\nSuccessfully prefixed: {prefixed_count}/{len(files_data)} files")
 
     if errors:
         print(f"\nErrors ({len(errors)}):")
@@ -434,14 +426,13 @@ def rename_files(files_data, target_dir):
         if len(errors) > 5:
             print(f"  ... and {len(errors) - 5} more errors")
 
-    return renamed_count
+    return prefixed_count
 
 
 def main():
-    """Main function to run the media chronological rename script."""
-    # Parse command-line arguments
+    """Main function to run from the command line, in Python 3."""
     parser = argparse.ArgumentParser(
-        description="Rename media files with chronological prefixes based on capture date—if this isn't available, fallback to modified, then created dates."
+        description="Prefix media files with chronological dates based on capture date—if this isn't available, fallback to modified, then created dates."
     )
     parser.add_argument(
         'path',
@@ -451,17 +442,16 @@ def main():
     )
     args = parser.parse_args()
 
-    print("Media Chronological Rename")
-    print("=" * 40)
+    print_heading("Media Chronological Prefix")
 
     # Check dependencies
+    print("Checking if you have the necessary libraries already installed...")
     if not check_dependencies():
         sys.exit(1)
 
-    # Get target directory
+    # Get and validate target directory
+    print("Checking directory...")
     target_dir = os.path.abspath(args.path)
-
-    # Validate directory exists
     if not os.path.isdir(target_dir):
         print(f"Error: '{args.path}' is not a valid directory.")
         sys.exit(1)
@@ -472,44 +462,41 @@ def main():
     else:
         print(f"Target directory: {target_dir}")
 
-    # Get list of ALL media files (including already-renamed ones)
-    all_files = get_filtered_files(target_dir, include_already_renamed=True)
+    print("Looking for and inspecting media in the given directory...")
+    # Get list of ALL media files (including already-prefixed ones)
+    all_files = get_filtered_files(target_dir, include_already_prefixed=True)
 
-    # Separate already-renamed files from not-yet-renamed files
-    already_renamed = [f for f in all_files if is_already_named_this_way(f)]
-
-    # Check for already-renamed files and get user preference
-    rename_choice = confirm_already_renamed_files(already_renamed)
-
-    if rename_choice == 'ignore':
-        # Only process files that haven't been renamed yet
-        file_list = [f for f in all_files if not is_already_named_this_way(f)]
-    elif rename_choice == 'rename_anyway':
-        # Process all files including already-renamed ones
+    # Handle any already prefixed based on user's preference
+    already_prefixed = [f for f in all_files if is_already_prefixed(f)]
+    prefix_choice = confirm_already_prefixed_files(already_prefixed)
+    if prefix_choice == 'ignore':
+        # Only process files that haven't been prefixed yet
+        file_list = [f for f in all_files if not is_already_prefixed(f)]
+    elif prefix_choice == 'prefix_anyway':
+        # Process all files including already-prefixed ones
         file_list = all_files
-    elif rename_choice == 'quit':
+    elif prefix_choice == 'quit':
         # User chose to stop
         sys.exit(0)
     else:
-        # Unexpected value
-        print(f"Error: Unexpected value '{rename_choice}' returned from confirm_already_renamed_files")
+        # Unexpected value—Quit
+        print(f"Error: Unexpected value '{prefix_choice}' returned from confirm_already_prefixed_files")
         sys.exit(1)
 
     file_count = len(file_list)
 
     # If no files to process, exit
     if file_count == 0:
-        print("\nNo files to process.")
+        print("\nNo media files to process.")
         sys.exit(0)
 
-    # Get user confirmation
+    # Get user confirmation if they'd like to continue
     if not confirm_continue(file_count, file_list):
         sys.exit(0)
+    print("\nOK, proceeding...")
 
-    print("\nProceeding with file renaming...")
-
+    print("\nCollecting file metadata...")
     # Get file metadata for the selected files
-    print("Collecting file metadata...")
     files_data = []
     try:
         for filename in file_list:
@@ -543,36 +530,27 @@ def main():
         print(f"Error getting file metadata: {e}")
         sys.exit(1)
 
-    # Display sample data
     print(f"\nCollected metadata for {len(files_data)} file(s).")
-    if files_data:
-        print("\nSample file data:")
-        sample = files_data[0]
-        print(f"  Filename: {sample['filename']}")
-        print(f"  Path: {sample['original_path']}")
-        print(f"  Capture Date: {sample['capture_date'] if sample['capture_date'] else 'Not found'}")
-        print(f"  Modified Date: {sample['modified_date']}")
-        print(f"  Created Date: {sample['created_date']}")
-        print(f"  Final Date (for renaming): {sample['final_date']}")
 
     # Check for missing capture dates and confirm
     if not confirm_missing_capture_dates(files_data):
         sys.exit(0)
 
-    # Generate new filenames
-    print("\nGenerating new filenames...")
+    # Generate new filenames with prefixes
+    print("\nGenerating prefixed filenames...")
     existing_names = set()
     for file_info in files_data:
-        new_filename = generate_new_filename(file_info, existing_names)
+        new_filename = generate_prefixed_filename(file_info, existing_names)
         file_info['new_filename'] = new_filename
         existing_names.add(new_filename)
 
-    # Preview renames and get final confirmation
-    if not preview_renames(files_data):
+    # Preview prefixes and get final confirmation
+    if not confirm_prefixes(files_data):
         sys.exit(0)
 
-    # Perform the renaming
-    rename_files(files_data, target_dir)
+    # Perform the prefixing
+    print("\nPrefixing files...")
+    prefix_files(files_data, target_dir)
 
 
 if __name__ == "__main__":
