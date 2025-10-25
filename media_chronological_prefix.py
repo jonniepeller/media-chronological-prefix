@@ -49,11 +49,11 @@ def ensure_dependencies():
         return True
 
     print_heading("MISSING REQUIRED DEPENDENCIES")
-    print("\nThe following required to run this script packages are not installed:")
+    print("\nThe following packages required to run this script are not installed:")
     for dep in MISSING_DEPS:
         print(f"  - {dep}")
 
-    if prompt_yes_no("Would you like to install them now?", cancel_message=None):
+    if prompt_yes_no("Would you like to install them now?"):
         return install_dependencies()
     else:
         print("\nPlease install the dependencies manually:")
@@ -159,66 +159,51 @@ def is_already_prefixed(filename):
     return bool(re.match(pattern, filename))
 
 
-def get_filtered_files(directory, include_already_prefixed=True):
+def get_media_files(directory, include_already_prefixed=True):
     """
     Get list of media files (photos/videos) in the given directory.
-    Returns a list of filenames (excludes subdirectories and non-media files).
+    Returns a list of fully qualified file paths (excludes subdirectories and non-media files).
     If include_already_prefixed is False, excludes files already prefixed with chronological format.
     """
     items = os.listdir(directory)
-    files = [item for item in items
+    files = [os.path.join(directory, item) for item in items
             if os.path.isfile(os.path.join(directory, item))
             and is_media_file(os.path.join(directory, item))]
 
     if not include_already_prefixed:
-        files = [f for f in files if not is_already_prefixed(f)]
+        files = [f for f in files if not is_already_prefixed(os.path.basename(f))]
 
     return files
 
 
-def prompt_yes_no(question, cancel_message="Operation cancelled."):
+def prompt_yes_no(question):
     """
-    Prompt user for yes/no confirmation.
-    Returns True for yes, False for no.
+    Prompt user for yes/no confirmation of given question.
+    Args: question - Question to ask the user.
+    Returns: True for yes, False for no.
     """
     while True:
         response = input(f"\n{question} (y/n): ").lower().strip()
         if response in ['y', 'yes']:
             return True
         elif response in ['n', 'no']:
-            if cancel_message:
-                print(cancel_message)
             return False
         else:
             print("Please enter 'y' or 'n'.")
 
 
-def get_file_list(directory):
+def get_file_metadata(file_paths):
     """
-    Get list of media files in the given directory (photos and videos only).
-    Excludes subdirectories and non-media files.
-    Returns a list of filenames.
-    """
-    try:
-        return get_filtered_files(directory)
-    except Exception as e:
-        print(f"Error listing files: {e}")
-        sys.exit(1)
+    Get metadata for specified files.
 
-
-def get_file_metadata(directory):
-    """
-    Get metadata for all media files in the directory (photos and videos only).
-    Excludes non-media files.
-    Returns a list of dictionaries with file information.
+    Args: file_paths - List of fully qualified file paths to process
+    Returns: List of dictionaries with file information
     """
     files_data = []
 
     try:
-        files = get_filtered_files(directory)
-
-        for filename in files:
-            filepath = os.path.join(directory, filename)
+        for filepath in file_paths:
+            filename = os.path.basename(filepath)
 
             # Get file stats
             stat_info = os.stat(filepath)
@@ -254,9 +239,10 @@ def get_file_metadata(directory):
 def confirm_already_prefixed_files(already_prefixed_files):
     """
     Check for files already prefixed with chronological format,
-     then if any area found, ask user what to do, then return their
-     selected preference.
-    Returns: 'ignore', 'prefix_anyway', or 'quit'.
+    then if any are found, ask user what to do, then return their selected preference.
+
+    Args: already_prefixed_files - List of file paths that are already prefixed
+    Returns: 'ignore', 'prefix_anyway', or 'quit'
     """
     if not already_prefixed_files:
         return 'ignore'  # No already-prefixed files, proceed normally
@@ -264,10 +250,10 @@ def confirm_already_prefixed_files(already_prefixed_files):
     print_heading("WARNING: Already-Prefixed Files Detected")
     print(f"\n{len(already_prefixed_files)} file(s) already appear to have been processed by this script.\n")
 
-    # Show first NUMBER_OF_FILES_TO_PREVIEW already-prefixed files
+    # Show first NUM_FILES_TO_PREVIEW already-prefixed files
     print("Already-prefixed files:")
-    for i, filename in enumerate(already_prefixed_files[:NUM_FILES_TO_PREVIEW], 1):
-        print(f"  {i}. {filename}")
+    for i, filepath in enumerate(already_prefixed_files[:NUM_FILES_TO_PREVIEW], 1):
+        print(f"  {i}. {os.path.basename(filepath)}")
     if len(already_prefixed_files) > NUM_FILES_TO_PREVIEW:
         print(f"  ... and {len(already_prefixed_files) - NUM_FILES_TO_PREVIEW} more")
 
@@ -283,21 +269,25 @@ def confirm_already_prefixed_files(already_prefixed_files):
         elif response == '2':
             return 'prefix_anyway'
         elif response == '3':
-            print("Operation cancelled.")
             return 'quit'
         else:
             print("Please enter 1, 2, or 3.")
 
 
 def confirm_continue(file_count, file_list):
-    """Ask user for initial confirmation before proceeding."""
+    """
+    Ask user for initial confirmation before proceeding.
+
+    Args: file_count - Number of files; file_list - List of file paths
+    Returns: True to continue, False to cancel
+    """
     print(f"\nFound {file_count} media file(s) to process.")
 
-    # Preview NUMBER_OF_FILES_TO_PREVIEW files
+    # Preview NUM_FILES_TO_PREVIEW files
     if file_list:
         print("\nSample files:")
-        for i, filename in enumerate(file_list[:NUM_FILES_TO_PREVIEW], 1):
-            print(f"  {i}. {filename}")
+        for i, filepath in enumerate(file_list[:NUM_FILES_TO_PREVIEW], 1):
+            print(f"  {i}. {os.path.basename(filepath)}")
         if file_count > NUM_FILES_TO_PREVIEW:
             print(f"  ... and {file_count - NUM_FILES_TO_PREVIEW} more")
 
@@ -352,8 +342,8 @@ def confirm_missing_capture_dates(files_data):
     print(f"{len(missing_capture)} file(s) do not have capture date metadata.")
     print("These files will use date modified if available, otherwise date created.")
 
-    # Show the first NUMBER_OF_FILES_TO_PREVIEW files without capture dates
-    print("Files without capture dates:")
+    # Show the first NUM_FILES_TO_PREVIEW files without capture dates
+    print("\nFiles without capture dates:")
     for i, file_info in enumerate(missing_capture[:NUM_FILES_TO_PREVIEW], 1):
         fallback = "modified date" if file_info['final_date'] == file_info['modified_date'] else "created date"
         print(f"  {i}. {file_info['filename']} (will use {fallback})")
@@ -381,17 +371,21 @@ def confirm_prefixes(files_data):
     return prompt_yes_no(f"Proceed with prefixing {len(files_data)} files?")
 
 
-def prefix_files(files_data, target_dir):
+def prefix_files(files_data):
     """
     Perform the actual file prefixing (renaming with date prefix).
-    Returns count of successfully prefixed files.
+
+    Args: files_data - List of file info dictionaries with metadata and new filenames
+    Returns: Count of successfully prefixed files
     """
     prefixed_count = 0
     errors = []
 
     for file_info in files_data:
         old_path = file_info['original_path']
-        new_path = os.path.join(target_dir, file_info['new_filename'])
+        # Get directory from the original path
+        directory = os.path.dirname(old_path)
+        new_path = os.path.join(directory, file_info['new_filename'])
 
         try:
             os.rename(old_path, new_path)
@@ -448,76 +442,46 @@ def main():
 
     print("Looking for and inspecting media in the given directory...")
     # Get list of ALL media files (including already-prefixed ones)
-    all_files = get_filtered_files(target_dir, include_already_prefixed=True)
+    media_files = get_media_files(target_dir, include_already_prefixed=True)
 
     # Handle any already prefixed based on user's preference
-    already_prefixed = [f for f in all_files if is_already_prefixed(f)]
+    already_prefixed = [f for f in media_files if is_already_prefixed(os.path.basename(f))]
     prefix_choice = confirm_already_prefixed_files(already_prefixed)
     if prefix_choice == 'ignore':
         # Only process files that haven't been prefixed yet
-        file_list = [f for f in all_files if not is_already_prefixed(f)]
+        media_files_filtered = [f for f in media_files if not is_already_prefixed(os.path.basename(f))]
     elif prefix_choice == 'prefix_anyway':
         # Process all files including already-prefixed ones
-        file_list = all_files
+        media_files_filtered = media_files
     elif prefix_choice == 'quit':
-        # User chose to stop
+        print("User opted not to continue—Quitting.")
         sys.exit(0)
     else:
-        # Unexpected value—Quit
         print(f"Error: Unexpected value '{prefix_choice}' returned from confirm_already_prefixed_files")
         sys.exit(1)
 
-    file_count = len(file_list)
+    media_files_filtered_count = len(media_files_filtered)
 
-    # If no files to process, exit
-    if file_count == 0:
-        print("\nNo media files to process.")
+    # If no files to prefix, exit
+    if media_files_filtered_count == 0:
+        print("\nNo media files to prefix.")
         sys.exit(0)
 
     # Get user confirmation if they'd like to continue
-    if not confirm_continue(file_count, file_list):
+    if not confirm_continue(media_files_filtered_count, media_files_filtered):
+        print("User opted not to continue—Quitting.")
         sys.exit(0)
     print("\nOK, proceeding...")
 
     print("\nCollecting file metadata...")
     # Get file metadata for the selected files
-    files_data = []
-    try:
-        for filename in file_list:
-            filepath = os.path.join(target_dir, filename)
-
-            # Get file stats
-            stat_info = os.stat(filepath)
-            modified_date = datetime.fromtimestamp(stat_info.st_mtime)
-            created_date = datetime.fromtimestamp(stat_info.st_ctime)
-
-            # Try to get capture date from EXIF/metadata
-            capture_date = get_capture_date(filepath)
-
-            # Determine final date using fallback logic
-            final_date = capture_date or modified_date or created_date
-
-            # Create file data dictionary
-            file_info = {
-                'original_path': filepath,
-                'filename': filename,
-                'modified_date': modified_date,
-                'created_date': created_date,
-                'capture_date': capture_date,
-                'final_date': final_date,
-                'new_filename': None
-            }
-
-            files_data.append(file_info)
-
-    except Exception as e:
-        print(f"Error getting file metadata: {e}")
-        sys.exit(1)
+    files_data = get_file_metadata(media_files_filtered)
 
     print(f"\nCollected metadata for {len(files_data)} file(s).")
 
     # Check for missing capture dates and confirm
     if not confirm_missing_capture_dates(files_data):
+        print("User opted not to continue—Quitting.")
         sys.exit(0)
 
     # Generate new filenames with prefixes
@@ -530,11 +494,12 @@ def main():
 
     # Preview prefixes and get final confirmation
     if not confirm_prefixes(files_data):
+        print("User opted not to continue—Quitting.")
         sys.exit(0)
 
     # Perform the prefixing
     print("\nPrefixing files...")
-    prefix_files(files_data, target_dir)
+    prefix_files(files_data)
 
 
 if __name__ == "__main__":
