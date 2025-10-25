@@ -4,6 +4,11 @@ Python 3 script to prefix all media (photos and videos) within given folder with
 ## NOTES:
 **Only photo and video files are processed.** The script uses MIME type detection to identify and process only media files (image/* and video/*). All other files are automatically ignored.
 
+**Already-renamed files are detected.** If the script finds files that already have chronological prefixes (format: `YYYY-MM-DD HH:MM:SS filename.ext`), it will ask you what to do:
+1. **Ignore** - Skip already-renamed files and only process files without prefixes
+2. **Add prefix anyway** - Add another date prefix to already-renamed files
+3. **Stop and quit** - Cancel the operation
+
 ## USAGE:
 ### Run on current directory
 `python3 media_chronological_rename.py`

@@ -2,9 +2,6 @@
 """
 Media Chronological Rename
 See README.md for docs
-
-TODO:
-- Ask user if they want to replace prefix, or ignore files that have already been named this way—then do what they ask.
 """
 
 import os
@@ -13,6 +10,7 @@ import argparse
 from datetime import datetime
 import subprocess
 import mimetypes
+import re
 
 # Check for required dependencies
 MISSING_DEPS = []
@@ -149,15 +147,33 @@ def is_media_file(filepath):
     return False
 
 
-def get_filtered_files(directory="."):
+def is_already_named_this_way(filename):
+    """
+    Check if a file has already been renamed with the chronological prefix format.
+    Expected format: YYYY-MM-DD HH:MM:SS[.mmm] original_name.ext
+    Returns True if the filename matches the pattern, False otherwise.
+    """
+    # Pattern matches: YYYY-MM-DD HH:MM:SS or YYYY-MM-DD HH:MM:SS.mmm at the start
+    # followed by a space and then the rest of the filename
+    pattern = r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{3})? .+'
+
+    return bool(re.match(pattern, filename))
+
+
+def get_filtered_files(directory=".", include_already_renamed=True):
     """
     Get list of media files (photos/videos) in the given directory.
     Returns a list of filenames (excludes subdirectories and non-media files).
+    If include_already_renamed is False, excludes files already named with chronological prefix.
     """
     items = os.listdir(directory)
     files = [item for item in items
             if os.path.isfile(os.path.join(directory, item))
             and is_media_file(os.path.join(directory, item))]
+
+    if not include_already_renamed:
+        files = [f for f in files if not is_already_named_this_way(f)]
+
     return files
 
 
@@ -236,9 +252,49 @@ def get_file_metadata(directory="."):
         sys.exit(1)
 
 
+def confirm_already_renamed_files(already_renamed_files):
+    """
+    Check for files already named with chronological prefix and ask user what to do.
+    Returns: 'ignore', 'rename_anyway', or 'quit'
+    """
+    if not already_renamed_files:
+        return 'ignore'  # No already-renamed files, proceed normally
+
+    print("\n" + "=" * 60)
+    print("WARNING: Already-Renamed Files Detected")
+    print("=" * 60)
+    print(f"\n{len(already_renamed_files)} file(s) already have chronological prefixes.")
+    print("These files appear to have already been processed by this script.\n")
+
+    # Show first up to 5 already-renamed files
+    print("Already-renamed files:")
+    for i, filename in enumerate(already_renamed_files[:5], 1):
+        print(f"  {i}. {filename}")
+
+    if len(already_renamed_files) > 5:
+        print(f"  ... and {len(already_renamed_files) - 5} more")
+
+    print("\nWhat would you like to do?")
+    print("  1. Ignore these files (only rename files without chronological prefix)")
+    print("  2. Add prefix anyway (will add another date prefix)")
+    print("  3. Stop and quit")
+
+    while True:
+        response = input("\nEnter your choice (1/2/3): ").strip()
+        if response == '1':
+            return 'ignore'
+        elif response == '2':
+            return 'rename_anyway'
+        elif response == '3':
+            print("Operation cancelled.")
+            return 'quit'
+        else:
+            print("Please enter 1, 2, or 3.")
+
+
 def confirm_continue(file_count, file_list):
     """Ask user for initial confirmation before proceeding."""
-    print(f"\nFound {file_count} file(s) in the current directory.")
+    print(f"\nFound {file_count} media file(s) to process.")
 
     # Show first up to 3 files
     if file_list:
@@ -248,7 +304,7 @@ def confirm_continue(file_count, file_list):
         if file_count > 3:
             print(f"  ... and {file_count - 3} more")
 
-    print(f"\nThis script will attempt to rename all {file_count} file(s).")
+    print(f"\nThis script will attempt to rename {file_count} file(s).")
 
     return prompt_yes_no("Do you want to continue?")
 
@@ -416,9 +472,35 @@ def main():
     else:
         print(f"Target directory: {target_dir}")
 
-    # Get list of files
-    file_list = get_file_list(target_dir)
+    # Get list of ALL media files (including already-renamed ones)
+    all_files = get_filtered_files(target_dir, include_already_renamed=True)
+
+    # Separate already-renamed files from not-yet-renamed files
+    already_renamed = [f for f in all_files if is_already_named_this_way(f)]
+
+    # Check for already-renamed files and get user preference
+    rename_choice = confirm_already_renamed_files(already_renamed)
+
+    if rename_choice == 'ignore':
+        # Only process files that haven't been renamed yet
+        file_list = [f for f in all_files if not is_already_named_this_way(f)]
+    elif rename_choice == 'rename_anyway':
+        # Process all files including already-renamed ones
+        file_list = all_files
+    elif rename_choice == 'quit':
+        # User chose to stop
+        sys.exit(0)
+    else:
+        # Unexpected value
+        print(f"Error: Unexpected value '{rename_choice}' returned from confirm_already_renamed_files")
+        sys.exit(1)
+
     file_count = len(file_list)
+
+    # If no files to process, exit
+    if file_count == 0:
+        print("\nNo files to process.")
+        sys.exit(0)
 
     # Get user confirmation
     if not confirm_continue(file_count, file_list):
@@ -426,9 +508,40 @@ def main():
 
     print("\nProceeding with file renaming...")
 
-    # Get file metadata
+    # Get file metadata for the selected files
     print("Collecting file metadata...")
-    files_data = get_file_metadata(target_dir)
+    files_data = []
+    try:
+        for filename in file_list:
+            filepath = os.path.join(target_dir, filename)
+
+            # Get file stats
+            stat_info = os.stat(filepath)
+            modified_date = datetime.fromtimestamp(stat_info.st_mtime)
+            created_date = datetime.fromtimestamp(stat_info.st_ctime)
+
+            # Try to get capture date from EXIF/metadata
+            capture_date = get_capture_date(filepath)
+
+            # Determine final date using fallback logic
+            final_date = capture_date or modified_date or created_date
+
+            # Create file data dictionary
+            file_info = {
+                'original_path': filepath,
+                'filename': filename,
+                'modified_date': modified_date,
+                'created_date': created_date,
+                'capture_date': capture_date,
+                'final_date': final_date,
+                'new_filename': None
+            }
+
+            files_data.append(file_info)
+
+    except Exception as e:
+        print(f"Error getting file metadata: {e}")
+        sys.exit(1)
 
     # Display sample data
     print(f"\nCollected metadata for {len(files_data)} file(s).")
