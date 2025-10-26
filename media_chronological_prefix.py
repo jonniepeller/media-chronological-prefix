@@ -225,6 +225,9 @@ def prompt_yes_no(question):
 def get_file_metadata(file_paths):
     """Get metadata for specified files.
 
+    Uses the earliest of capture date (from EXIF/metadata) or modified date
+    for each file. Falls back to created date if neither is available.
+
     Args:
         file_paths: List of fully qualified file paths to process
 
@@ -245,8 +248,15 @@ def get_file_metadata(file_paths):
             # Try to get capture date from EXIF/metadata
             capture_date = get_capture_date(filepath)
 
-            # Determine final date using fallback logic
-            final_date = capture_date or modified_date or created_date
+            # Determine final date using the earliest of capture and modified dates
+            if capture_date and modified_date:
+                final_date = min(capture_date, modified_date)
+            elif capture_date:
+                final_date = capture_date
+            elif modified_date:
+                final_date = modified_date
+            else:
+                final_date = created_date
 
             # Create file data dictionary
             file_info = {
@@ -375,8 +385,8 @@ def generate_prefixed_filename(file_info, existing_names):
 def confirm_missing_capture_dates(files_data):
     """Check for files with missing capture dates and ask user for confirmation.
 
-    Shows files that will use fallback dates (modified or created) instead of
-    capture dates from EXIF/metadata.
+    Shows files that will use modified date instead of capture date from EXIF/metadata.
+    Note that all files use the earliest of capture or modified date when both are available.
 
     Args:
         files_data: List of file info dictionaries with metadata
@@ -395,7 +405,7 @@ def confirm_missing_capture_dates(files_data):
     # Inform the user
     print_heading("WARNING: Files with Missing Capture Dates")
     print(f"{len(missing_capture)} file(s) do not have capture date metadata.")
-    print("These files will use date modified if available, otherwise date created.")
+    print("These files will use modified date if available, otherwise created date.")
 
     # Show the first NUM_ITEMS_TO_PREVIEW files without capture dates
     print("\nFiles without capture dates:")
@@ -471,7 +481,7 @@ def prefix_files(files_data):
 def main():
     """Main function to run from the command line, in Python 3."""
     parser = argparse.ArgumentParser(
-        description="Prefix media files with chronological dates (YYYY-MM-DD HH-MM-SS) based on capture date—if this isn't available, fallback to modified, then created dates."
+        description="Prefix media files with chronological dates (YYYY-MM-DD HH-MM-SS) using the earliest of capture date or modified date—if neither is available, fallback to created date."
     )
     parser.add_argument(
         'path',

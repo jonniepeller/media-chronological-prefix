@@ -1,5 +1,5 @@
 # media-chronological-prefix
-Python 3 script to prefix all media files (photos and videos) within given folder with chronological dates based on capture date, falling back to date modified, then date created.
+Python 3 script to prefix all media files (photos and videos) within given folder with chronological dates using the earliest of capture date or modified date, falling back to created date if neither is available.
 
 ## NOTES:
 **Only photo and video files are processed.** The script uses MIME type detection to identify and process only media files (image/* and video/*). All other files are automatically ignored.
